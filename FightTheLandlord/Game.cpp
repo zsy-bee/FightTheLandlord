@@ -1,5 +1,5 @@
 #include "Gamer.h"
-
+#include"ParticleFilter.h"
 using namespace std;
 
 Gamer Gamer::clone() {
@@ -115,6 +115,157 @@ int Gamer::simulatePlay(Gamer& hand, std::vector<Meld>& move) {
     if (singles_increased > 0) {
         cost += singles_increased * 30;
     }
-
     return cost;
+}
+
+Meld Gamer::recognize(const std::vector<CardNum>& cards) {
+    Gamer g;
+    g.addCards(cards);
+    int total = g.totalCards();
+    g.analyze();
+    std::cout << "[DEBUG] triples: ";
+    for (const auto& t : g.triples) std::cout << t.level << " ";
+    std::cout << "\n[DEBUG] singles: ";
+    for (const auto& s : g.singles) std::cout << s.level << " ";
+    std::cout << "\n[DEBUG] bombs: " << g.bombs.size();
+    std::cout << "\n[DEBUG] total: " << total << "\n";
+    if (g.singles.size() == 1 && total == 1) {
+        return Meld(Single{ g.singles[0].level });
+    }
+
+    // 对子
+    if (g.pairs.size() == 1 && total == 2) {
+        return Meld(Pair{ g.pairs[0].level });
+    }
+
+    // 三张
+    if (g.triples.size() == 1 && total == 3) {
+        return Meld(Triple{ g.triples[0].level });
+    }
+
+    // 炸弹
+    if (g.bombs.size() == 1 && total == 4) {
+        return Meld(Bomb{ g.bombs[0].level });
+    }
+
+    // 火箭
+    if (g.has_rocket && total == 2) {
+        return Meld(Rocket{});
+    }
+
+    // 单顺
+    if (g.straights.size() == 1 && total == g.straights[0].levels.size()) {
+        return Meld(Straight{ g.straights[0].levels });
+    }
+
+    // 连对
+    if (g.consec_pairs.size() == 1 && total == g.consec_pairs[0].levels.size()) {
+        return Meld(ConsecutivePairs{ g.consec_pairs[0].levels });
+    }
+
+    // 飞机主体
+    if (g.planes.size() == 1 && total == g.planes[0].levels.size()) {
+        return Meld(Plane{ g.planes[0].levels });
+    }
+
+    // 三带一
+    if (g.triples.size() == 1 && g.singles.size() == 2 && total == 4) {
+        Level t = g.triples[0].level;
+        for (const auto& single : g.singles) {
+            if (single.level != t) {
+                return Meld(TripleWithSingle{ t, single.level });
+            }
+        }
+    }
+
+    // 三带二
+    if (g.triples.size() == 1 && g.pairs.size() >= 1 && total == 5) {
+        Level t = g.triples[0].level;
+        for (const auto& p : g.pairs) {
+            if (p.level != t) {
+                return Meld(TripleWithPair{ t, p.level });
+            }
+        }
+    }
+
+    // 四带二单
+    if (g.bombs.size() == 1 && total == 6) {
+        Level b = g.bombs[0].level;
+        std::vector<Level> candidates;
+        for (const auto& s : g.singles) {
+            if (s.level != b) candidates.push_back(s.level);
+        }
+        if (candidates.size() >= 2) {
+            return Meld(BombWithSingles{ b, candidates[0], candidates[1] });
+        }
+    }
+
+    // 四带二对
+    if (g.bombs.size() == 1 && total == 8) {
+        Level b = g.bombs[0].level;
+        std::vector<Level> candidates;
+        for (const auto& p : g.pairs) {
+            if (p.level != b) candidates.push_back(p.level);
+        }
+        if (candidates.size() >= 2) {
+            return Meld(BombWithPairs{ b, candidates[0], candidates[1] });
+        }
+    }
+
+    for (const auto& plane : g.planes) {
+        int triple_count = plane.levels.size() / 3;
+        int total_other = total - plane.levels.size();
+
+        // 提取三条点数（去重）
+        std::set<Level> triple_levels;
+        for (size_t i = 0; i < plane.levels.size(); i += 3) {
+            triple_levels.insert(plane.levels[i]);
+        }
+
+        // 飞机带小翼
+        if (total_other == triple_count) {
+            std::vector<Level> candidates;
+            for (const auto& s : g.singles) {
+                if (triple_levels.count(s.level) == 0) {
+                    candidates.push_back(s.level);
+                }
+            }
+            if (candidates.size() == triple_count) {
+                return Meld(PlaneWithSingles{ plane.levels, candidates });
+            }
+        }
+
+        // 飞机带大翼
+        if (total_other == 2 * triple_count) {
+            std::vector<Level> candidates;
+            for (const auto& p : g.pairs) {
+                if (triple_levels.count(p.level) == 0) {
+                    candidates.push_back(p.level);
+                }
+            }
+            if (candidates.size() == triple_count) {
+                return Meld(PlaneWithPairs{ plane.levels, candidates });
+            }
+        }
+    }
+    return Meld(Pass{});
+}
+
+DouDizhuAI::DouDizhuAI() {
+    recorder = new CardRecorder();
+    PF = new ParticleFilter(*recorder);
+}
+DouDizhuAI::~DouDizhuAI() {
+    delete PF;
+    delete recorder;
+}
+void DouDizhuAI::initMyHand(const std::vector<CardNum>& cards) {
+    my_hand.addCards(cards);
+    my_hand.analyze();
+    recorder->markPlayed(cards);
+}
+
+void DouDizhuAI::myType(const std::vector<CardNum>& cards) {
+    //recorder->markPlayed(cards);
+    PF->init(player1_type, player2_type,cards);
 }

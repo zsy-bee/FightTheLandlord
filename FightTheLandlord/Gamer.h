@@ -8,6 +8,7 @@
 #include <vector>
 #include<variant>
 #include<unordered_map>
+
 //#include "jsoncpp/json.h" // 在平台上，C++编译时默认包含此库
 
 using namespace std;
@@ -118,9 +119,10 @@ public:
 
 enum class MeldType {
     SINGLE, PAIR, TRIPLE, BOMB, ROCKET,
-    STRAIGHT,
-    CONSECUTIVE_PAIRS,
-    PLANE,
+    STRAIGHT, CONSECUTIVE_PAIRS, PLANE,
+    TRIPLE_WITH_SINGLE, TRIPLE_WITH_PAIR,
+    BOMB_WITH_SINGLES, BOMB_WITH_PAIRS,
+    PLANE_WITH_SINGLES, PLANE_WITH_PAIRS,
     PASS
 };
 
@@ -199,10 +201,85 @@ struct Pass {
     void play(Gamer& hand) const;
 };
 
+struct Rocket {
+    static constexpr MeldType type = MeldType::ROCKET;
+    int power() const;
+    std::vector<Level> required_levels() const;
+    bool canPlay(const Gamer& hand) const;
+    void play(Gamer& hand) const;
+};
+
+struct TripleWithSingle {
+    static constexpr MeldType type = MeldType::TRIPLE_WITH_SINGLE;
+    Level triple_level;
+    Level single_level;
+    int power() const;
+    std::vector<Level> required_levels() const;
+    bool canPlay(const Gamer& hand) const;
+    void play(Gamer& hand) const;
+};
+
+struct TripleWithPair {
+    static constexpr MeldType type = MeldType::TRIPLE_WITH_PAIR;
+    Level triple_level;
+    Level pair_level;
+    int power() const;
+    std::vector<Level> required_levels() const;
+    bool canPlay(const Gamer& hand) const;
+    void play(Gamer& hand) const;
+};
+
+struct BombWithSingles {
+    static constexpr MeldType type = MeldType::BOMB_WITH_SINGLES;
+    Level bomb_level;
+    Level single1;
+    Level single2;
+    int power() const;
+    std::vector<Level> required_levels() const;
+    bool canPlay(const Gamer& hand) const;
+    void play(Gamer& hand) const;
+};
+
+struct BombWithPairs {
+    static constexpr MeldType type = MeldType::BOMB_WITH_PAIRS;
+    Level bomb_level;
+    Level pair1;
+    Level pair2;
+    int power() const;
+    std::vector<Level> required_levels() const;
+    bool canPlay(const Gamer& hand) const;
+    void play(Gamer& hand) const;
+};
+
+struct PlaneWithSingles {
+    static constexpr MeldType type = MeldType::PLANE_WITH_SINGLES;
+    std::vector<Level> plane_levels;
+    std::vector<Level> singles;
+    int power() const;
+    std::vector<Level> required_levels() const;
+    bool canPlay(const Gamer& hand) const;
+    void play(Gamer& hand) const;
+};
+
+struct PlaneWithPairs {
+    static constexpr MeldType type = MeldType::PLANE_WITH_PAIRS;
+    std::vector<Level> plane_levels;
+    std::vector<Level> pairs;
+    int power() const;
+    std::vector<Level> required_levels() const;
+    bool canPlay(const Gamer& hand) const;
+    void play(Gamer& hand) const;
+};
+
+
+
 // ========== MeldVariant 和 Meld 类 ==========
 using MeldVariant = std::variant<
-    Single, Pair, Triple, Bomb,
+    Single, Pair, Triple, Bomb, Rocket,
     Straight, ConsecutivePairs, Plane,
+    TripleWithSingle, TripleWithPair,
+    BombWithSingles, BombWithPairs,
+    PlaneWithSingles, PlaneWithPairs,
     Pass
 >;
 
@@ -220,10 +297,51 @@ public:
     MeldType type() const;
 };
 
+enum class GamerType {
+    Lord, Farmer1, Farmer2
+};
+
+class CardRecorder {
+    bool played[54] = { false };  // 54张牌，true表示已打出
+
+public:
+    // 标记一张牌已打出
+    void markPlayed(CardNum c) { played[c] = true; }
+
+    // 标记多张牌已打出
+    void markPlayed(const std::vector<CardNum>& cards) {
+        for (CardNum c : cards) played[c] = true;
+    }
+
+    // 获取未打出的牌（剩余牌池）
+    std::vector<CardNum> getRemainingCards() const {
+        std::vector<CardNum> result;
+        for (int i = 0; i < 54; ++i) {
+            if (!played[i]) result.push_back(i);
+        }
+        return result;
+    }
+
+    // 某张牌是否已打出
+    bool isPlayed(CardNum c) const { return played[c]; }
+
+    // 重置（新一局）
+    void reset() { memset(played, 0, sizeof(played)); }
+};
+   
+
+
 // ========== Gamer 类完整定义 ==========
 class Gamer {
     std::vector<std::vector<card>> levels;
     Gamer clone();
+    std::vector<std::pair<int, int>> findSegments(int min_count, int min_length, int range_start, int range_end);
+    void clearMelds() {
+        singles.clear(); pairs.clear(); triples.clear(); bombs.clear();
+        straights.clear(); consec_pairs.clear(); planes.clear();
+        has_rocket = false;
+    }
+    
 public:
     std::vector<Single> singles;
     std::vector<Pair> pairs;
@@ -233,30 +351,58 @@ public:
     std::vector<ConsecutivePairs> consec_pairs;
     std::vector<Plane> planes;
     bool has_rocket = false;
-
+    Meld* player1{nullptr};
+    Meld* player2{nullptr};
+    bool first= true;
+    
     Gamer() {
         for (int i = 0; i < MAX_LEVEL; ++i) {
             levels.push_back(std::vector<card>());
         }
+        
     }
-
-    void clearMelds() {
-        singles.clear(); pairs.clear(); triples.clear(); bombs.clear();
-        straights.clear(); consec_pairs.clear(); planes.clear();
-        has_rocket = false;
-    }
-
-    std::vector<std::pair<int, int>> findSegments(int min_count, int min_length,int range_start, int range_end);
-
+    
     void analyze();
 
     int simulatePlay(Gamer& hand, std::vector<Meld>& move);
+
+    Meld recognize(const std::vector<CardNum>& cards);
+   
+    //接受对方出牌
+    void opponent_cards(const std::vector<std::vector<CardNum>>& cards) {
+        /*if (first) {
+            first = false;
+            if (cards[0].empty()&&cards[1].empty()) {
+                type = GamerType::Lord;
+            }
+            else if (cards[0].empty()&&!cards[1].empty()) {
+                type = GamerType::Farmer1;
+            }
+            else if (!cards[0].empty() && cards[1].empty()) {
+                type = GamerType::Farmer2;
+            }
+            return;
+        }*/
+        if(player1!=nullptr) delete player1;
+        if (player2 != nullptr) delete player2;
+        player1 = new Meld(recognize(cards[0]));
+        player2 = new Meld(recognize(cards[1]));
+    }
+
+    int totalCards() const {
+        int total = 0;
+        for (const auto& bucket : levels) {
+            total += bucket.size();
+        }
+        return total;
+    }
 
     
 
     void addCard(CardNum c) {
         card cd(c);
         levels[cd.getLevel()].push_back(cd);
+       
     }
 
     void addCards(const std::vector<CardNum>& cs) {
@@ -264,6 +410,7 @@ public:
             card cd(c);
             levels[(int)cd.getLevel()].push_back(cd);
         }
+        
     }
 
     void clear() {
@@ -311,6 +458,26 @@ public:
         }
     }
 };
+
+class ParticleFilter;
+class CardRecorder;
+class DouDizhuAI {
+public:
+    CardRecorder* recorder;
+    ParticleFilter* PF;
+    GamerType my_type;
+    GamerType player1_type;
+    GamerType player2_type;
+    Gamer my_hand;
+    DouDizhuAI();
+    ~DouDizhuAI();
+    
+    void initMyHand(const std::vector<CardNum>& cards);
+    void myType(const std::vector<CardNum>& cards);
+    
+};
+
+
 
 // ========== 牌型结构体的成员函数实现 ==========
 
@@ -370,12 +537,127 @@ inline void Plane::play(Gamer& hand) const {
     for (Level l : levels) hand.tryPlay(l);
 }
 
+inline int Rocket::power() const { return 2000; }
+inline std::vector<Level> Rocket::required_levels() const { return { level_joker, level_JOKER }; }
+
+inline bool Rocket::canPlay(const Gamer& hand) const {
+    return hand.count(level_joker) >= 1 && hand.count(level_JOKER) >= 1;
+}
+
+inline void Rocket::play(Gamer& hand) const {  
+    hand.tryPlay(level_joker);
+    hand.tryPlay(level_JOKER);
+}
 inline int Pass::power() const { return -1; }
 inline std::vector<Level> Pass::required_levels() const { return {}; }
 inline bool Pass::canPlay(const Gamer& hand) const { return true; }
 inline void Pass::play(Gamer& hand) const { /* 不做任何事 */ }
-
 // ========== Meld 类的成员函数实现 ==========
+
+
+inline int TripleWithSingle::power() const { return 400 + static_cast<int>(triple_level); }
+inline std::vector<Level> TripleWithSingle::required_levels() const {
+    return { triple_level, triple_level, triple_level, single_level };
+}
+inline bool TripleWithSingle::canPlay(const Gamer& hand) const {
+    return hand.count(triple_level) >= 3 && hand.count(single_level) >= 1;
+}
+inline void TripleWithSingle::play(Gamer& hand) const {
+    hand.tryPlay({ triple_level, triple_level, triple_level });
+    hand.tryPlay(single_level);
+}
+
+// ========== 三带二 ==========
+inline int TripleWithPair::power() const { return 400 + static_cast<int>(triple_level); }
+inline std::vector<Level> TripleWithPair::required_levels() const {
+    return { triple_level, triple_level, triple_level, pair_level, pair_level };
+}
+inline bool TripleWithPair::canPlay(const Gamer& hand) const {
+    return hand.count(triple_level) >= 3 && hand.count(pair_level) >= 2;
+}
+inline void TripleWithPair::play(Gamer& hand) const {
+    hand.tryPlay({ triple_level, triple_level, triple_level });
+    hand.tryPlay({ pair_level, pair_level });
+}
+
+// ========== 四带二单 ==========
+inline int BombWithSingles::power() const { return 1000 + static_cast<int>(bomb_level); }
+inline std::vector<Level> BombWithSingles::required_levels() const {
+    return { bomb_level, bomb_level, bomb_level, bomb_level, single1, single2 };
+}
+inline bool BombWithSingles::canPlay(const Gamer& hand) const {
+    return hand.count(bomb_level) >= 4 && hand.count(single1) >= 1 && hand.count(single2) >= 1;
+}
+inline void BombWithSingles::play(Gamer& hand) const {
+    hand.tryPlay({ bomb_level, bomb_level, bomb_level, bomb_level });
+    hand.tryPlay(single1);
+    hand.tryPlay(single2);
+}
+
+// ========== 四带二对 ==========
+inline int BombWithPairs::power() const { return 1000 + static_cast<int>(bomb_level); }
+inline std::vector<Level> BombWithPairs::required_levels() const {
+    return { bomb_level, bomb_level, bomb_level, bomb_level, pair1, pair1, pair2, pair2 };
+}
+inline bool BombWithPairs::canPlay(const Gamer& hand) const {
+    return hand.count(bomb_level) >= 4 && hand.count(pair1) >= 2 && hand.count(pair2) >= 2;
+}
+inline void BombWithPairs::play(Gamer& hand) const {
+    hand.tryPlay({ bomb_level, bomb_level, bomb_level, bomb_level });
+    hand.tryPlay({ pair1, pair1 });
+    hand.tryPlay({ pair2, pair2 });
+}
+
+// ========== 飞机带单 ==========
+inline int PlaneWithSingles::power() const {
+    return 500 + static_cast<int>(plane_levels.size()) * 30 + static_cast<int>(plane_levels.back());
+}
+inline std::vector<Level> PlaneWithSingles::required_levels() const {
+    std::vector<Level> result;
+    for (Level l : plane_levels) {
+        result.push_back(l); result.push_back(l); result.push_back(l);
+    }
+    for (Level l : singles) result.push_back(l);
+    return result;
+}
+inline bool PlaneWithSingles::canPlay(const Gamer& hand) const {
+    for (Level l : plane_levels) if (hand.count(l) < 3) return false;
+    for (Level l : singles) if (hand.count(l) < 1) return false;
+    return true;
+}
+inline void PlaneWithSingles::play(Gamer& hand) const {
+    for (Level l : plane_levels) hand.tryPlay({ l, l, l });
+    for (Level l : singles) hand.tryPlay(l);
+}
+
+// ========== 飞机带对 ==========
+inline int PlaneWithPairs::power() const {
+    return 500 + static_cast<int>(plane_levels.size()) * 30 + static_cast<int>(plane_levels.back());
+}
+inline std::vector<Level> PlaneWithPairs::required_levels() const {
+    std::vector<Level> result;
+    for (Level l : plane_levels) {
+        result.push_back(l); result.push_back(l); result.push_back(l);
+    }
+    for (Level l : pairs) {
+        result.push_back(l); result.push_back(l);
+    }
+    return result;
+}
+inline bool PlaneWithPairs::canPlay(const Gamer& hand) const {
+    for (Level l : plane_levels) if (hand.count(l) < 3) return false;
+    for (Level l : pairs) if (hand.count(l) < 2) return false;
+    return true;
+}
+inline void PlaneWithPairs::play(Gamer& hand) const {
+    for (Level l : plane_levels) hand.tryPlay({ l, l, l });
+    for (Level l : pairs) hand.tryPlay({ l, l });
+}
+
+
+// ========== Meld 类实现 ==========
+
+
 inline int Meld::power() const {
     return std::visit([](const auto& m) -> int { return m.power(); }, data);
 }
