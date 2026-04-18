@@ -112,6 +112,9 @@ public:
         l = card2level(c);
     }
     card(){}
+     CardNum getCardNum() const {
+        return c;
+    }
     bool operator<(const card& rhs) const { return l < rhs.l; }
     bool operator==(const card& rhs) const { return l == rhs.l; }
     Level getLevel() const { return l; }
@@ -137,6 +140,7 @@ struct Single {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct Pair {
@@ -146,6 +150,7 @@ struct Pair {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct Triple {
@@ -155,6 +160,7 @@ struct Triple {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct Bomb {
@@ -164,6 +170,7 @@ struct Bomb {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct Straight {
@@ -173,6 +180,7 @@ struct Straight {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct ConsecutivePairs {
@@ -182,6 +190,7 @@ struct ConsecutivePairs {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct Plane {
@@ -191,6 +200,7 @@ struct Plane {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct Pass {
@@ -199,6 +209,7 @@ struct Pass {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct Rocket {
@@ -207,6 +218,7 @@ struct Rocket {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct TripleWithSingle {
@@ -217,6 +229,7 @@ struct TripleWithSingle {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct TripleWithPair {
@@ -227,6 +240,7 @@ struct TripleWithPair {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct BombWithSingles {
@@ -238,6 +252,7 @@ struct BombWithSingles {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct BombWithPairs {
@@ -249,6 +264,7 @@ struct BombWithPairs {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct PlaneWithSingles {
@@ -259,6 +275,7 @@ struct PlaneWithSingles {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 struct PlaneWithPairs {
@@ -269,6 +286,7 @@ struct PlaneWithPairs {
     std::vector<Level> required_levels() const;
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 
@@ -295,6 +313,7 @@ public:
     bool canPlay(const Gamer& hand) const;
     void play(Gamer& hand) const;
     MeldType type() const;
+    std::vector<card> playAndReturn(Gamer& hand) const;
 };
 
 enum class GamerType {
@@ -303,7 +322,8 @@ enum class GamerType {
 
 class CardRecorder {
     bool played[54] = { false };  // 54张牌，true表示已打出
-
+    std::vector<CardNum> player1;
+    std::vector<CardNum> player2;
 public:
     // 标记一张牌已打出
     void markPlayed(CardNum c) { played[c] = true; }
@@ -312,7 +332,14 @@ public:
     void markPlayed(const std::vector<CardNum>& cards) {
         for (CardNum c : cards) played[c] = true;
     }
-
+    void markPlayed(int idx,const std::vector<CardNum>& cards) {
+        if(idx==0) player1.insert(player1.end(), cards.begin(), cards.end());
+        else player2.insert(player2.end(), cards.begin(), cards.end());
+    }
+    std::vector<CardNum> getRemainingCards(int idx) {
+        if(idx==0) return player1;
+        else return player2;
+    }
     // 获取未打出的牌（剩余牌池）
     std::vector<CardNum> getRemainingCards() const {
         std::vector<CardNum> result;
@@ -334,7 +361,7 @@ public:
 // ========== Gamer 类完整定义 ==========
 class Gamer {
     std::vector<std::vector<card>> levels;
-    Gamer clone();
+    
     std::vector<std::pair<int, int>> findSegments(int min_count, int min_length, int range_start, int range_end);
     void clearMelds() {
         singles.clear(); pairs.clear(); triples.clear(); bombs.clear();
@@ -343,6 +370,7 @@ class Gamer {
     }
     
 public:
+    Gamer clone();
     std::vector<Single> singles;
     std::vector<Pair> pairs;
     std::vector<Triple> triples;
@@ -367,7 +395,7 @@ public:
     int simulatePlay(Gamer& hand, std::vector<Meld>& move);
 
     Meld recognize(const std::vector<CardNum>& cards);
-   
+    
     //接受对方出牌
     void opponent_cards(const std::vector<std::vector<CardNum>>& cards) {
         /*if (first) {
@@ -442,6 +470,29 @@ public:
         return true;
     }
 
+    card tryPlayAndReturn(Level lvl) {
+        auto& bucket = levels[static_cast<int>(lvl)];
+        if (bucket.empty()) return card(-1);  // 返回无效牌
+        card c = bucket.back();
+        bucket.pop_back();
+        return c;
+    }
+
+    std::vector<card> tryPlayAndReturn(const std::vector<Level>& lvls) {
+        std::unordered_map<int, int> need;
+        for (Level l : lvls) need[static_cast<int>(l)]++;
+        for (auto& [idx, cnt] : need) {
+            if (static_cast<int>(levels[idx].size()) < cnt) return {};
+        }
+        std::vector<card> result;
+        for (Level l : lvls) {
+            result.push_back(levels[static_cast<int>(l)].back());
+            levels[static_cast<int>(l)].pop_back();
+            
+        }
+        return result;
+    }
+
     struct Snapshot {
         std::vector<size_t> sizes;
     };
@@ -457,6 +508,7 @@ public:
             levels[i].resize(ss.sizes[i]);
         }
     }
+    bool canPlayTogether(const Gamer& hand, const std::vector<Meld>& melds);
 };
 
 class ParticleFilter;
@@ -471,10 +523,14 @@ public:
     Gamer my_hand;
     DouDizhuAI();
     ~DouDizhuAI();
-    
+    //得到自己手牌
     void initMyHand(const std::vector<CardNum>& cards);
-    void myType(const std::vector<CardNum>& cards);
-    
+    //记录另外两方身份，告知明牌
+    bool publicCards(GamerType player1, GamerType player2,const std::vector<CardNum>& public_cards);
+    //另外两方出牌后更新记牌器和粒子滤波器
+    void update(GamerType idx, const std::vector<CardNum>& cards);
+    //自己出牌，返回自己出牌的牌，如果不合法返回空容器
+    std::vector<card> play(const std::vector<Meld>& cards);
 };
 
 
@@ -682,4 +738,102 @@ inline MeldType Meld::type() const {
     return std::visit([](const auto& m) -> MeldType {
         return std::decay_t<decltype(m)>::type;
         }, data);
+}
+
+inline std::vector<card> Meld::playAndReturn(Gamer& hand) const {
+    return std::visit([&hand](const auto& m) { return m.playAndReturn(hand); }, data);
+}
+
+inline std::vector<card> Single::playAndReturn(Gamer& hand) const {
+    return { hand.tryPlayAndReturn(level) };
+}
+
+inline std::vector<card> Pair::playAndReturn(Gamer& hand) const {
+    return hand.tryPlayAndReturn({ level, level });
+}
+
+inline std::vector<card> Triple::playAndReturn(Gamer& hand) const {
+    return hand.tryPlayAndReturn({ level, level, level });
+}
+
+inline std::vector<card> Bomb::playAndReturn(Gamer& hand) const {
+    return hand.tryPlayAndReturn({ level, level, level, level });
+}
+
+inline std::vector<card> Straight::playAndReturn(Gamer& hand) const {
+    return hand.tryPlayAndReturn(levels);
+}
+
+inline std::vector<card> ConsecutivePairs::playAndReturn(Gamer& hand) const {
+    return hand.tryPlayAndReturn(levels);
+}
+
+inline std::vector<card> Plane::playAndReturn(Gamer& hand) const {
+    return hand.tryPlayAndReturn(levels);
+}
+
+inline std::vector<card> Pass::playAndReturn(Gamer& hand) const {
+    return {};
+}
+
+inline std::vector<card> Rocket::playAndReturn(Gamer& hand) const {
+    return hand.tryPlayAndReturn({ level_joker, level_JOKER });
+}
+
+inline std::vector<card> TripleWithSingle::playAndReturn(Gamer& hand) const {
+    std::vector<card> result = hand.tryPlayAndReturn({ triple_level, triple_level, triple_level });
+    auto s = hand.tryPlayAndReturn(single_level);
+    result.push_back(s);
+    return result;
+}
+
+inline std::vector<card> TripleWithPair::playAndReturn(Gamer& hand) const {
+    std::vector<card> result = hand.tryPlayAndReturn({ triple_level, triple_level, triple_level });
+    auto p = hand.tryPlayAndReturn({ pair_level, pair_level });
+    result.insert(result.end(), p.begin(), p.end());
+    return result;
+}
+
+inline std::vector<card> BombWithSingles::playAndReturn(Gamer& hand) const {
+    std::vector<card> result = hand.tryPlayAndReturn({ bomb_level, bomb_level, bomb_level, bomb_level });
+    auto s1 = hand.tryPlayAndReturn(single1);
+    auto s2 = hand.tryPlayAndReturn(single2);
+    result.push_back(s1);
+    result.push_back(s2);
+    return result;
+}
+
+inline std::vector<card> BombWithPairs::playAndReturn(Gamer& hand) const {
+    std::vector<card> result = hand.tryPlayAndReturn({ bomb_level, bomb_level, bomb_level, bomb_level });
+    auto p1 = hand.tryPlayAndReturn({ pair1, pair1 });
+    auto p2 = hand.tryPlayAndReturn({ pair2, pair2 });
+    result.insert(result.end(), p1.begin(), p1.end());
+    result.insert(result.end(), p2.begin(), p2.end());
+    return result;
+}
+
+inline std::vector<card> PlaneWithSingles::playAndReturn(Gamer& hand) const {
+    std::vector<card> result;
+    for (Level l : plane_levels) {
+        auto t = hand.tryPlayAndReturn({ l, l, l });
+        result.insert(result.end(), t.begin(), t.end());
+    }
+    for (Level l : singles) {
+        auto s = hand.tryPlayAndReturn(l);
+        result.push_back(s);
+    }
+    return result;
+}
+
+inline std::vector<card> PlaneWithPairs::playAndReturn(Gamer& hand) const {
+    std::vector<card> result;
+    for (Level l : plane_levels) {
+        auto t = hand.tryPlayAndReturn({ l, l, l });
+        result.insert(result.end(), t.begin(), t.end());
+    }
+    for (Level l : pairs) {
+        auto p = hand.tryPlayAndReturn({ l, l });
+        result.insert(result.end(), p.begin(), p.end());
+    }
+    return result;
 }

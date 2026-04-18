@@ -251,6 +251,19 @@ Meld Gamer::recognize(const std::vector<CardNum>& cards) {
     return Meld(Pass{});
 }
 
+bool Gamer::canPlayTogether(const Gamer& hand, const std::vector<Meld>& melds) {
+    std::unordered_map<Level, int> total_need;
+    for (const auto& m : melds) {
+        for (Level l : m.required_levels()) {
+            total_need[l]++;
+        }
+    }
+    for (auto& [lvl, need] : total_need) {
+        if (hand.count(lvl) < need) return false;
+    }
+    return true;
+}
+
 DouDizhuAI::DouDizhuAI() {
     recorder = new CardRecorder();
     PF = new ParticleFilter(*recorder);
@@ -265,7 +278,45 @@ void DouDizhuAI::initMyHand(const std::vector<CardNum>& cards) {
     recorder->markPlayed(cards);
 }
 
-void DouDizhuAI::myType(const std::vector<CardNum>& cards) {
-    //recorder->markPlayed(cards);
-    PF->init(player1_type, player2_type,cards);
+bool DouDizhuAI::publicCards(GamerType player1, GamerType player2, const std::vector<CardNum>& public_cards) {
+    if (player1 == player2) return false;
+    std::vector<GamerType> players = { GamerType::Lord, GamerType::Farmer1, GamerType::Farmer2 };
+    for (auto& p : players) {
+        if (p == player1) players.erase(std::remove(players.begin(), players.end(), player1), players.end());
+        if (p == player2) players.erase(std::remove(players.begin(), players.end(), player2), players.end());
+    }
+    this->my_type = players[0];
+    this->player1_type= player1;
+    this->player2_type = player2;
+    PF->init(player1,player2,public_cards);
+}
+
+void DouDizhuAI::update(GamerType player, const std::vector<CardNum>& cards) {
+    if( player == player1_type) recorder->markPlayed(0,cards);
+    if (player == player2_type) recorder->markPlayed(1,cards);
+    recorder->markPlayed(cards);
+    PF->update(player, cards);
+}
+
+std::vector<card> DouDizhuAI::play(const std::vector<Meld>& cards) {
+    auto avail = my_hand.canPlayTogether(my_hand, cards);
+    auto temp = my_hand.clone();
+    if (avail == false) return {};
+    bool can = true;
+    for (auto& meld : cards) {
+        if (meld.canPlay(temp) == false) {
+            can = false;
+            break;
+        }
+        meld.play(temp);
+        temp.analyze();
+    }
+    if (!can) return {};
+    std::vector<card> res;
+    for (auto& meld : cards) {
+        auto played = meld.playAndReturn(my_hand);
+        res.insert(res.end(), played.begin(), played.end());
+        my_hand.analyze();
+    }
+    return res;
 }
